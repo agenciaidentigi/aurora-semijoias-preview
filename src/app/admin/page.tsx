@@ -1,22 +1,22 @@
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { getDb } from "@/lib/db";
 import { adminModules } from "@/lib/admin-modules";
 
 export const dynamic = "force-dynamic";
 
 async function getMetrics() {
-  const supabase = await createSupabaseServerClient();
+  const sql = getDb();
   const [products, clicks, leads, partners] = await Promise.all([
-    supabase.from("products").select("id", { count: "exact", head: true }),
-    supabase.from("affiliate_clicks").select("id", { count: "exact", head: true }),
-    supabase.from("leads").select("id", { count: "exact", head: true }),
-    supabase.from("affiliate_partners").select("id", { count: "exact", head: true })
+    sql("select count(*)::int as total from products"),
+    sql("select count(*)::int as total from affiliate_clicks"),
+    sql("select count(*)::int as total from leads"),
+    sql("select count(*)::int as total from affiliate_partners")
   ]);
   return [
-    ["Produtos", products.count ?? 0],
-    ["Cliques", clicks.count ?? 0],
-    ["Leads", leads.count ?? 0],
-    ["Parceiros", partners.count ?? 0]
+    ["Produtos", products[0]?.total ?? 0],
+    ["Cliques", clicks[0]?.total ?? 0],
+    ["Leads", leads[0]?.total ?? 0],
+    ["Parceiros", partners[0]?.total ?? 0]
   ];
 }
 

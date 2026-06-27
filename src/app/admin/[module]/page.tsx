@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { findAdminModule } from "@/lib/admin-modules";
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { assertIdentifier, getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { AdminModuleView } from "@/components/admin/AdminModuleView";
 
@@ -11,7 +11,15 @@ export default async function AdminModulePage({ params, searchParams }: { params
   const module = findAdminModule(moduleKey);
   if (!module) notFound();
   const profile = await requireAdmin();
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from(module.table).select("*").order("updated_at", { ascending: false }).limit(100);
-  return <AdminModuleView module={module} rows={(data ?? []) as Record<string, any>[]} role={profile.role} message={query.success} error={query.error ?? error?.message} />;
+  const sql = getDb();
+  let data: Record<string, any>[] = [];
+  let error: string | undefined;
+
+  try {
+    data = (await sql(`select * from ${assertIdentifier(module.table)} order by updated_at desc limit 100`)) as Record<string, any>[];
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : "Erro ao carregar registros.";
+  }
+
+  return <AdminModuleView module={module} rows={data} role={profile.role} message={query.success} error={query.error ?? error} />;
 }

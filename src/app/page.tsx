@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { getDb } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -13,12 +13,12 @@ const fallbackProducts: Partial<Product>[] = [
 
 async function getHomeData() {
   try {
-    const supabase = await createSupabaseServerClient();
-    const [{ data: products }, { data: banners }] = await Promise.all([
-      supabase.from("products").select("*").eq("status", "published").order("display_order").limit(8),
-      supabase.from("banners").select("*").eq("is_active", true).order("display_order").limit(3)
+    const sql = getDb();
+    const [products, banners] = await Promise.all([
+      sql("select * from products where status = 'published' order by display_order asc limit 8"),
+      sql("select * from banners where is_active = true order by display_order asc limit 3")
     ]);
-    return { products: (products?.length ? products : fallbackProducts) as Partial<Product>[], banners: banners ?? [] };
+    return { products: (products.length ? products : fallbackProducts) as Partial<Product>[], banners };
   } catch {
     return { products: fallbackProducts, banners: [] };
   }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { findAdminModule } from "@/lib/admin-modules";
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { assertIdentifier, getDb } from "@/lib/db";
 import { slugify } from "@/lib/utils";
 
 const idSchema = z.string().uuid();
@@ -13,6 +13,16 @@ const idSchema = z.string().uuid();
 function parseValue(value: FormDataEntryValue | null, type?: string) {
   if (type === "checkbox") return value === "on";
   if (type === "number") return value === null || value === "" ? null : Number(value);
+  if (type === "textarea" && value) {
+    const raw = String(value);
+    if (raw.trim().startsWith("{") || raw.trim().startsWith("[")) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    }
+  }
   return value === null ? null : String(value);
 }
 
@@ -23,10 +33,9 @@ async function assertModuleAccess(moduleKey: string, write = true) {
   return { module, profile };
 }
 
-export async function saveAdminRecord(moduleKey: string, formData: FormData) {
-  const { module, profile } = await assertModuleAccess(moduleKey);
-  const supabase = await createSupabaseServerClient();
-  const id = String(formData.get("id") ?? "");
+function buildPayload(moduleKey: string, formData: FormData) {
+  const module = findAdminModule(moduleKey);
+  if (!module) throw new Error("Modulo administrativo inexistente.");
   const payload: Record<string, unknown> = {};
 
   for (const column of module.columns) {
@@ -35,20 +44,41 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
 
   if ("name" in payload && !payload.slug) payload.slug = slugify(String(payload.name));
   if (module.table === "products" && !payload.status) payload.status = "draft";
+  return payload;
+}
 
-  const result = id
-    ? await supabase.from(module.table).update(payload).eq("id", idSchema.parse(id)).select("id").single()
-    : await supabase.from(module.table).insert(payload).select("id").single();
+export async function saveAdminRecord(moduleKey: string, formData: FormData) {
+  const { module, profile } = await assertModuleAccess(moduleKey);
+  const sql = getDb();
+  const table = assertIdentifier(module.table);
+  const id = String(formData.get("id") ?? "");
+  const payload = buildPayload(moduleKey, formData);
+  const columns = Object.keys(payload).map(assertIdentifier);
+  const values = Object.values(payload);
+  let savedId = id;
 
-  if (result.error) redirect(`/admin/${moduleKey}?error=${encodeURIComponent(result.error.message)}`);
+  try {
+    if (id) {
+      const assignments = columns.map((column, index) => `${column} = $${index + 1}`).join(", ");
+      const rows = await sql(`update ${table} set ${assignments} where id = $${columns.length + 1} returning id`, [
+        ...values,
+        idSchema.parse(id)
+      ]);
+      savedId = rows[0]?.id ?? id;
+    } else {
+      const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
+      const rows = await sql(`insert into ${table} (${columns.join(", ")}) values (${placeholders}) returning id`, values);
+      savedId = rows[0]?.id;
+    }
 
-  await supabase.from("audit_logs").insert({
-    actor_id: profile.id,
-    action: id ? "update" : "create",
-    table_name: module.table,
-    record_id: result.data?.id,
-    changes: payload
-  });
+    await sql(
+      "insert into audit_logs (actor_id, action, table_name, record_id, changes) values ($1, $2, $3, $4, $5::jsonb)",
+      [profile.id, id ? "update" : "create", table, savedId, JSON.stringify(payload)]
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao salvar registro.";
+    redirect(`/admin/${moduleKey}?error=${encodeURIComponent(message)}`);
+  }
 
   revalidatePath(`/admin/${moduleKey}`);
   redirect(`/admin/${moduleKey}?success=Registro salvo com sucesso`);
@@ -56,37 +86,83 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
 
 export async function deleteAdminRecord(moduleKey: string, id: string) {
   const { module, profile } = await assertModuleAccess(moduleKey);
-  const supabase = await createSupabaseServerClient();
+  const sql = getDb();
+  const table = assertIdentifier(module.table);
   const parsedId = idSchema.parse(id);
-  const { error } = await supabase.from(module.table).delete().eq("id", parsedId);
-  if (error) redirect(`/admin/${moduleKey}?error=${encodeURIComponent(error.message)}`);
-  await supabase.from("audit_logs").insert({ actor_id: profile.id, action: "delete", table_name: module.table, record_id: parsedId });
+
+  try {
+    await sql(`delete from ${table} where id = $1`, [parsedId]);
+    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+      profile.id,
+      "delete",
+      table,
+      parsedId
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao excluir registro.";
+    redirect(`/admin/${moduleKey}?error=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath(`/admin/${moduleKey}`);
 }
 
 export async function duplicateProduct(id: string) {
   const { profile } = await assertModuleAccess("produtos");
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("products").select("*").eq("id", idSchema.parse(id)).single();
-  if (error || !data) redirect(`/admin/produtos?error=${encodeURIComponent(error?.message ?? "Produto nao encontrado")}`);
-  const copy = { ...data, id: undefined, name: `${data.name} copia`, slug: `${data.slug}-copia-${Date.now()}`, status: "draft", created_at: undefined, updated_at: undefined };
-  const { data: created, error: insertError } = await supabase.from("products").insert(copy).select("id").single();
-  if (insertError) redirect(`/admin/produtos?error=${encodeURIComponent(insertError.message)}`);
-  await supabase.from("audit_logs").insert({ actor_id: profile.id, action: "duplicate", table_name: "products", record_id: created?.id });
+  const sql = getDb();
+  const parsedId = idSchema.parse(id);
+
+  try {
+    const rows = await sql("select * from products where id = $1 limit 1", [parsedId]);
+    const product = rows[0];
+    if (!product) throw new Error("Produto nao encontrado.");
+
+    const { id: _id, created_at: _createdAt, updated_at: _updatedAt, ...copy } = product;
+    copy.name = `${product.name} copia`;
+    copy.slug = `${product.slug}-copia-${Date.now()}`;
+    copy.status = "draft";
+
+    const columns = Object.keys(copy).map(assertIdentifier);
+    const values = Object.values(copy);
+    const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
+    const created = await sql(`insert into products (${columns.join(", ")}) values (${placeholders}) returning id`, values);
+
+    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+      profile.id,
+      "duplicate",
+      "products",
+      created[0]?.id
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao duplicar produto.";
+    redirect(`/admin/produtos?error=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath("/admin/produtos");
 }
 
 export async function archiveProduct(id: string) {
   const { profile } = await assertModuleAccess("produtos");
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("products").update({ status: "archived" }).eq("id", idSchema.parse(id));
-  if (error) redirect(`/admin/produtos?error=${encodeURIComponent(error.message)}`);
-  await supabase.from("audit_logs").insert({ actor_id: profile.id, action: "archive", table_name: "products", record_id: id });
+  const sql = getDb();
+  const parsedId = idSchema.parse(id);
+
+  try {
+    await sql("update products set status = 'archived' where id = $1", [parsedId]);
+    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+      profile.id,
+      "archive",
+      "products",
+      parsedId
+    ]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao arquivar produto.";
+    redirect(`/admin/produtos?error=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath("/admin/produtos");
 }
 
 export async function signOut() {
-  const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  const { clearAdminSession } = await import("@/lib/auth");
+  await clearAdminSession();
   redirect("/login");
 }

@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from "@/lib/supabase";
+import { getDb } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -6,14 +6,33 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   await requireAdmin(["admin", "analyst"]);
   const params = await searchParams;
-  const supabase = await createSupabaseServerClient();
-  let query = supabase.from("affiliate_clicks").select("*, products(name, slug, category_id), affiliate_partners(name, commission_rate)").order("clicked_at", { ascending: false }).limit(500);
-  if (params.from) query = query.gte("clicked_at", params.from);
-  if (params.to) query = query.lte("clicked_at", params.to);
-  const { data: clicks } = await query;
+  const sql = getDb();
+  const filters: string[] = [];
+  const values: string[] = [];
+
+  if (params.from) {
+    values.push(params.from);
+    filters.push(`c.clicked_at >= $${values.length}`);
+  }
+  if (params.to) {
+    values.push(params.to);
+    filters.push(`c.clicked_at <= $${values.length}`);
+  }
+
+  const where = filters.length ? `where ${filters.join(" and ")}` : "";
+  const clicks = await sql(
+    `select c.*, p.name as product_name, p.slug as product_slug, ap.name as partner_name, ap.commission_rate
+     from affiliate_clicks c
+     left join products p on p.id = c.product_id
+     left join affiliate_partners ap on ap.id = c.affiliate_partner_id
+     ${where}
+     order by c.clicked_at desc
+     limit 500`,
+    values
+  );
   const total = clicks?.length ?? 0;
   const estimated = (clicks ?? []).reduce((sum: number, row: any) => sum + Number(row.estimated_commission ?? 0), 0);
-  const byProduct = Object.entries((clicks ?? []).reduce((acc: Record<string, number>, row: any) => { const key = row.products?.name ?? "Sem produto"; acc[key] = (acc[key] ?? 0) + 1; return acc; }, {})).sort((a: any, b: any) => b[1] - a[1]);
+  const byProduct = Object.entries((clicks ?? []).reduce((acc: Record<string, number>, row: any) => { const key = row.product_name ?? "Sem produto"; acc[key] = (acc[key] ?? 0) + 1; return acc; }, {})).sort((a: any, b: any) => b[1] - a[1]);
 
   return (
     <div className="grid gap-6">
@@ -30,7 +49,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </section>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="border border-line bg-white p-5"><h3 className="font-serif text-2xl">Produtos mais clicados</h3><ul className="mt-4 grid gap-2">{byProduct.slice(0, 10).map(([name, count]) => <li key={name} className="flex justify-between border-b border-line py-2"><span>{name}</span><strong>{count}</strong></li>)}</ul></section>
-        <section className="border border-line bg-white p-5"><h3 className="font-serif text-2xl">Ultimos cliques</h3><div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><tbody>{(clicks ?? []).slice(0, 20).map((click: any) => <tr key={click.id} className="border-b border-line"><td className="py-2">{click.products?.name ?? "Produto"}</td><td>{click.affiliate_partners?.name ?? "Parceiro"}</td><td>{new Date(click.clicked_at).toLocaleString("pt-BR")}</td></tr>)}</tbody></table></div></section>
+        <section className="border border-line bg-white p-5"><h3 className="font-serif text-2xl">Ultimos cliques</h3><div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><tbody>{(clicks ?? []).slice(0, 20).map((click: any) => <tr key={click.id} className="border-b border-line"><td className="py-2">{click.product_name ?? "Produto"}</td><td>{click.partner_name ?? "Parceiro"}</td><td>{new Date(click.clicked_at).toLocaleString("pt-BR")}</td></tr>)}</tbody></table></div></section>
       </div>
     </div>
   );

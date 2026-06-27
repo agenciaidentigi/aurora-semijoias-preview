@@ -9,11 +9,9 @@ A identidade visual e propria. O projeto nao usa textos, imagens, logotipos ou d
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
-- Supabase PostgreSQL
-- Supabase Auth
-- Supabase Storage
-- Row Level Security
-- Preparado para deploy na Vercel
+- Neon Postgres
+- Autenticacao administrativa propria por cookie assinado
+- Deploy preparado para Vercel
 
 ## Rotas principais
 
@@ -40,8 +38,6 @@ A identidade visual e propria. O projeto nao usa textos, imagens, logotipos ou d
 - Editor: cria e edita produtos, categorias, colecoes, banners, home e paginas.
 - Analista: visualiza dashboard e relatorios, sem alterar dados.
 
-A protecao acontece no layout de `/admin`, nas Server Actions e nas politicas RLS do Supabase.
-
 ## Instalar
 
 1. Instale Node.js 20.9 ou superior.
@@ -55,41 +51,34 @@ npm install
 
 ```bash
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
-SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+DATABASE_URL=postgresql://user:password@host.neon.tech/neondb?sslmode=require
+ADMIN_SESSION_SECRET=troque-por-um-segredo-longo-e-aleatorio
 NEXT_PUBLIC_SITE_NAME=Aurora Semijoias
 ```
 
-Nunca exponha `SUPABASE_SERVICE_ROLE_KEY` no frontend. Ela deve existir apenas no ambiente do servidor.
+## Configurar Neon
 
-## Configurar Supabase
-
-1. Crie um projeto no Supabase.
-2. Ative Auth por e-mail e senha.
-3. Execute `supabase/migrations/001_initial_schema.sql` no SQL Editor.
-4. Execute `supabase/seed/demo.sql` para carregar dados de demonstracao.
-5. Para criar a conta inicial, execute `supabase/seed/admin-user.sql` em um ambiente novo.
+1. Crie ou escolha um projeto Neon.
+2. Aplique `neon/migrations/001_initial_schema.sql`.
+3. Aplique `neon/seed/demo.sql` para carregar dados de demonstracao e a conta admin inicial.
 
 Conta inicial documentada:
 
 - E-mail: `admin@aurora.local`
 - Senha: `Troque-Esta-Senha-123!`
 
-Troque a senha imediatamente apos o primeiro acesso. Em producao, prefira criar o usuario pelo painel do Supabase Auth e depois inserir/atualizar o registro correspondente em `profiles` com `role = 'admin'`.
+Troque a senha imediatamente depois da primeira aprovacao/implantacao real.
 
-## Storage
+## Imagens
 
-A migracao cria os buckets publicos:
+Nesta previa com Neon, o painel usa URLs de imagem nos campos `Imagem principal`, `Logotipo` e `Imagem`.
 
-- `product-images`
-- `banners`
+Neon e banco de dados, nao storage de arquivos. Para upload real de imagens apos a aprovacao do cliente, recomendamos adicionar:
 
-Uploads administrativos passam por `/admin/upload`, que valida:
-
-- JPG, PNG ou WebP;
-- tamanho maximo de 4 MB;
-- usuario com papel `admin` ou `editor`.
+- Vercel Blob;
+- Cloudflare R2;
+- AWS S3;
+- ou outro storage S3-compatible.
 
 ## Links de afiliados
 
@@ -128,11 +117,10 @@ Abra `http://localhost:3000`.
 1. Suba o projeto para um repositorio Git.
 2. Crie um novo projeto na Vercel.
 3. Configure as variaveis de ambiente iguais ao `.env.example`.
-4. Garanta que o Supabase tenha as migrations e seeds aplicadas.
-5. Faça deploy.
+4. Garanta que a migration e o seed foram aplicados no Neon.
+5. Faca deploy.
 
-Build command: `npm run build`  
-Output: automatico do Next.js
+Build command: `npm run build`
 
 ## Estrutura
 
@@ -141,16 +129,16 @@ src/app                 rotas App Router
 src/app/admin           painel protegido
 src/app/r/[slug]        redirecionamento afiliado
 src/components/admin    componentes do painel
-src/lib                 Supabase, auth, tipos e utilitarios
-supabase/migrations     schema, RLS, indices e storage
-supabase/seed           dados demo e admin inicial
+src/lib                 Neon, auth, tipos e utilitarios
+neon/migrations         schema, indices e triggers
+neon/seed               dados demo e admin inicial
 ```
 
 ## Observacoes de seguranca
 
-- RLS esta ativo em todas as tabelas publicas.
-- `service role key` so e usada em rotas de servidor.
+- A senha fica armazenada com hash scrypt.
+- Sessao administrativa usa cookie HTTP-only assinado.
 - Rotas administrativas validam usuario e papel.
 - Exclusoes pedem confirmacao no painel.
 - Alteracoes importantes gravam `audit_logs`.
-- Dados de formulario sao tratados no servidor e o schema do banco reforca tipos e relacionamentos.
+- `DATABASE_URL` e `ADMIN_SESSION_SECRET` devem existir apenas no servidor/Vercel.
