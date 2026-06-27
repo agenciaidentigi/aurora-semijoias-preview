@@ -15,10 +15,10 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   const store = storeRows[0] as unknown as Record<string, any> | undefined;
   if (!store) notFound();
 
-  const products = await sql.unsafe(
+  const products = (await sql.unsafe(
     "select * from products where store_id = $1 and status = 'published' order by display_order asc, created_at desc limit 24",
     [store.id]
-  ) as unknown as Record<string, any>[];
+  )) as unknown as Record<string, any>[];
 
   return (
     <main className="min-h-screen bg-paper text-ink">
