@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: #fbfaf7;
+  color: #191714;
+}
+
+input, select, textarea, button {
+  font: inherit;
+}
+
+.admin-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.admin-scrollbar::-webkit-scrollbar-thumb {
+  background: #d6c8b8;
+}
