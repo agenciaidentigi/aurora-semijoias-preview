@@ -60,18 +60,18 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
   try {
     if (id) {
       const assignments = columns.map((column, index) => `${column} = $${index + 1}`).join(", ");
-      const rows = await sql(`update ${table} set ${assignments} where id = $${columns.length + 1} returning id`, [
+      const rows = await sql.unsafe(`update ${table} set ${assignments} where id = $${columns.length + 1} returning id`, [
         ...values,
         idSchema.parse(id)
       ]);
       savedId = rows[0]?.id ?? id;
     } else {
       const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
-      const rows = await sql(`insert into ${table} (${columns.join(", ")}) values (${placeholders}) returning id`, values);
+      const rows = await sql.unsafe(`insert into ${table} (${columns.join(", ")}) values (${placeholders}) returning id`, values);
       savedId = rows[0]?.id;
     }
 
-    await sql(
+    await sql.unsafe(
       "insert into audit_logs (actor_id, action, table_name, record_id, changes) values ($1, $2, $3, $4, $5::jsonb)",
       [profile.id, id ? "update" : "create", table, savedId, JSON.stringify(payload)]
     );
@@ -91,8 +91,8 @@ export async function deleteAdminRecord(moduleKey: string, id: string) {
   const parsedId = idSchema.parse(id);
 
   try {
-    await sql(`delete from ${table} where id = $1`, [parsedId]);
-    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+    await sql.unsafe(`delete from ${table} where id = $1`, [parsedId]);
+    await sql.unsafe("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
       profile.id,
       "delete",
       table,
@@ -112,7 +112,7 @@ export async function duplicateProduct(id: string) {
   const parsedId = idSchema.parse(id);
 
   try {
-    const rows = await sql("select * from products where id = $1 limit 1", [parsedId]);
+    const rows = await sql.unsafe("select * from products where id = $1 limit 1", [parsedId]);
     const product = rows[0];
     if (!product) throw new Error("Produto nao encontrado.");
 
@@ -124,9 +124,9 @@ export async function duplicateProduct(id: string) {
     const columns = Object.keys(copy).map(assertIdentifier);
     const values = Object.values(copy);
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
-    const created = await sql(`insert into products (${columns.join(", ")}) values (${placeholders}) returning id`, values);
+    const created = await sql.unsafe(`insert into products (${columns.join(", ")}) values (${placeholders}) returning id`, values);
 
-    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+    await sql.unsafe("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
       profile.id,
       "duplicate",
       "products",
@@ -146,8 +146,8 @@ export async function archiveProduct(id: string) {
   const parsedId = idSchema.parse(id);
 
   try {
-    await sql("update products set status = 'archived' where id = $1", [parsedId]);
-    await sql("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
+    await sql.unsafe("update products set status = 'archived' where id = $1", [parsedId]);
+    await sql.unsafe("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
       profile.id,
       "archive",
       "products",

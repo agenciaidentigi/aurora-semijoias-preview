@@ -7,10 +7,10 @@ export const dynamic = "force-dynamic";
 async function getMetrics() {
   const sql = getDb();
   const [products, clicks, leads, partners] = await Promise.all([
-    sql("select count(*)::int as total from products"),
-    sql("select count(*)::int as total from affiliate_clicks"),
-    sql("select count(*)::int as total from leads"),
-    sql("select count(*)::int as total from affiliate_partners")
+    sql.unsafe("select count(*)::int as total from products"),
+    sql.unsafe("select count(*)::int as total from affiliate_clicks"),
+    sql.unsafe("select count(*)::int as total from leads"),
+    sql.unsafe("select count(*)::int as total from affiliate_partners")
   ]);
   return [
     ["Produtos", products[0]?.total ?? 0],

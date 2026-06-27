@@ -1,6 +1,6 @@
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
-let db: ReturnType<typeof neon> | null = null;
+let db: ReturnType<typeof postgres> | null = null;
 
 export function getDb() {
   if (!process.env.DATABASE_URL) {
@@ -8,7 +8,11 @@ export function getDb() {
   }
 
   if (!db) {
-    db = neon(process.env.DATABASE_URL);
+    db = postgres(process.env.DATABASE_URL, {
+      max: 3,
+      idle_timeout: 20,
+      connect_timeout: 10
+    });
   }
 
   return db;

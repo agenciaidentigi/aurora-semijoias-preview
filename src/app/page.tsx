@@ -15,8 +15,8 @@ async function getHomeData() {
   try {
     const sql = getDb();
     const [products, banners] = await Promise.all([
-      sql("select * from products where status = 'published' order by display_order asc limit 8"),
-      sql("select * from banners where is_active = true order by display_order asc limit 3")
+      sql.unsafe("select * from products where status = 'published' order by display_order asc limit 8"),
+      sql.unsafe("select * from banners where is_active = true order by display_order asc limit 3")
     ]);
     return { products: (products.length ? products : fallbackProducts) as Partial<Product>[], banners };
   } catch {

@@ -20,7 +20,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   }
 
   const where = filters.length ? `where ${filters.join(" and ")}` : "";
-  const clicks = await sql(
+  const clicks = await sql.unsafe(
     `select c.*, p.name as product_name, p.slug as product_slug, ap.name as partner_name, ap.commission_rate
      from affiliate_clicks c
      left join products p on p.id = c.product_id

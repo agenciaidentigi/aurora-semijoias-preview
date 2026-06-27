@@ -13,7 +13,7 @@ function applyAffiliateTemplate(template: string | null, product: Record<string,
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const sql = getDb();
-  const products = await sql(
+  const products = await sql.unsafe(
     `select p.*, ap.name as partner_name, ap.affiliate_code, ap.affiliate_param, ap.url_template
      from products p
      left join affiliate_partners ap on ap.id = p.affiliate_partner_id
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     finalUrl = product.original_url || "/";
   }
 
-  await sql(
+  await sql.unsafe(
     `insert into affiliate_clicks (
       product_id, affiliate_partner_id, source, referrer, utm_source, utm_medium,
       utm_campaign, utm_content, utm_term, user_agent, ip_hash, clicked_url, estimated_commission

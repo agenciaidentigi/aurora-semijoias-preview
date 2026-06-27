@@ -12,7 +12,7 @@ async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/admin");
   const sql = getDb();
-  const rows = await sql(
+  const rows = await sql.unsafe(
     "select id, email, full_name, role, is_active, password_hash from profiles where lower(email) = lower($1) and is_active = true limit 1",
     [email]
   );

@@ -41,7 +41,13 @@ function verifyToken(token: string): SessionPayload | null {
 
   if (!isValid) return null;
 
-  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionPayload;
+  let parsed: SessionPayload;
+  try {
+    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionPayload;
+  } catch {
+    return null;
+  }
+
   if (parsed.exp < Date.now()) return null;
 
   return parsed;
@@ -85,7 +91,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   if (!session) return null;
 
   const sql = getDb();
-  const rows = await sql(
+  const rows = await sql.unsafe(
     "select id, email, full_name, role, is_active from profiles where id = $1 and is_active = true limit 1",
     [session.id]
   );
