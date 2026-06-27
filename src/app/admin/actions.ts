@@ -179,12 +179,13 @@ export async function duplicateProduct(id: string) {
     const values = Object.values(copy) as any[];
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
     const created = await sql.unsafe(`insert into products (${columns.join(", ")}) values (${placeholders}) returning id`, values);
+    const duplicatedId = (created[0] as unknown as { id?: string } | undefined)?.id ?? null;
 
     await sql.unsafe("insert into audit_logs (actor_id, action, table_name, record_id) values ($1, $2, $3, $4)", [
       profile.id,
       "duplicate",
       "products",
-      (created[0] as unknown as { id?: string } | undefined)?.id
+      duplicatedId
     ]);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao duplicar produto.";
