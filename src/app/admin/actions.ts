@@ -54,7 +54,7 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const payload = buildPayload(moduleKey, formData);
   const columns = Object.keys(payload).map(assertIdentifier);
-  const values = Object.values(payload);
+  const values = Object.values(payload) as any[];
   let savedId = id;
 
   try {
@@ -122,7 +122,7 @@ export async function duplicateProduct(id: string) {
     copy.status = "draft";
 
     const columns = Object.keys(copy).map(assertIdentifier);
-    const values = Object.values(copy);
+    const values = Object.values(copy) as any[];
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
     const created = await sql.unsafe(`insert into products (${columns.join(", ")}) values (${placeholders}) returning id`, values);
 
