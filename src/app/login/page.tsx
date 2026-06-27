@@ -16,7 +16,7 @@ async function signIn(formData: FormData) {
     "select id, email, full_name, role, is_active, password_hash from profiles where lower(email) = lower($1) and is_active = true limit 1",
     [email]
   );
-  const profile = rows[0] as (Profile & { password_hash: string | null }) | undefined;
+  const profile = rows[0] as unknown as (Profile & { password_hash: string | null }) | undefined;
 
   if (!profile || !verifyPassword(password, profile.password_hash)) {
     redirect(`/login?error=${encodeURIComponent("E-mail ou senha invalidos.")}&next=${encodeURIComponent(next)}`);

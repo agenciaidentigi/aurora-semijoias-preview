@@ -96,7 +96,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     [session.id]
   );
 
-  return (rows[0] as Profile | undefined) ?? null;
+  return (rows[0] as unknown as Profile | undefined) ?? null;
 }
 
 export async function requireAdmin(allowedRoles: Role[] = ["admin", "editor", "analyst"]) {
