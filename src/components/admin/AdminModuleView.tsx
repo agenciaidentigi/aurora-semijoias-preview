@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { type ChangeEvent, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { archiveProduct, deleteAdminRecord, duplicateProduct, saveAdminRecord } from "@/app/admin/actions";
 import type { AdminModule, Role } from "@/lib/types";
@@ -11,10 +11,16 @@ function valueForInput(value: unknown) {
   return String(value);
 }
 
+function isImageField(key: string) {
+  return ["main_image_url", "image_url", "hero_image_url", "logo_url"].includes(key);
+}
+
 export function AdminModuleView({ module, rows, role, message, error }: { module: AdminModule; rows: Record<string, any>[]; role: Role; message?: string; error?: string }) {
   const [editing, setEditing] = useState<Record<string, any> | null>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canWrite = module.writeRoles.includes(role);
   const filtered = useMemo(() => rows.filter((row) => JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [rows, query]);
@@ -32,6 +38,7 @@ export function AdminModuleView({ module, rows, role, message, error }: { module
 
       {message && <p className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</p>}
       {error && <p className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {formError && <p className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</p>}
 
       <div className="flex flex-wrap gap-3 border border-line bg-white p-4">
         <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-64 flex-1 border border-line px-4 py-2" placeholder="Pesquisar e filtrar" />
@@ -79,12 +86,36 @@ export function AdminModuleView({ module, rows, role, message, error }: { module
             </div>
             <input type="hidden" name="id" value={editing.id ?? ""} />
             <div className="grid gap-4 md:grid-cols-2">
-              {module.columns.map((column) => (
-                <label key={column.key} className={column.type === "textarea" ? "grid gap-2 md:col-span-2" : "grid gap-2"}>
-                  <span className="text-sm font-bold">{column.label}</span>
-                  {column.type === "textarea" ? <textarea name={column.key} defaultValue={valueForInput(editing[column.key])} className="min-h-28 border border-line bg-white p-3" /> : column.type === "select" ? <select name={column.key} defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3">{(column.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> : column.type === "checkbox" ? <input type="checkbox" name={column.key} defaultChecked={Boolean(editing[column.key])} className="h-5 w-5" /> : <input name={column.key} type={column.type === "number" ? "number" : column.type === "email" ? "email" : column.type === "url" ? "url" : "text"} step="0.01" defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3" />}
-                </label>
-              ))}
+              {module.columns.map((column) => {
+                const inputId = `${module.key}-${column.key}`;
+                const isUploadable = column.type === "url" && isImageField(column.key);
+
+                return (
+                  <label key={column.key} className={column.type === "textarea" ? "grid gap-2 md:col-span-2" : "grid gap-2"}>
+                    <span className="text-sm font-bold">{column.label}</span>
+                    {column.type === "textarea" ? <textarea name={column.key} defaultValue={valueForInput(editing[column.key])} className="min-h-28 border border-line bg-white p-3" /> : column.type === "select" ? <select name={column.key} defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3">{(column.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> : column.type === "checkbox" ? <input type="checkbox" name={column.key} defaultChecked={Boolean(editing[column.key])} className="h-5 w-5" /> : (
+                      <div className="grid gap-2">
+                        <input id={inputId} name={column.key} type={column.type === "number" ? "number" : column.type === "email" ? "email" : column.type === "url" ? "url" : "text"} step="0.01" defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3" />
+                        {isUploadable && (
+                          <div className="flex items-center gap-3">
+                            <label className="cursor-pointer border border-dashed border-line bg-white px-3 py-2 text-xs font-bold uppercase">
+                              {uploadingField === column.key ? "Enviando..." : "Upload Cloudinary"}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                disabled={uploadingField !== null}
+                                onChange={(event) => handleImageUpload(event, inputId, column.key, module.key, setUploadingField, setFormError)}
+                              />
+                            </label>
+                            {valueForInput(editing[column.key]) && <a className="text-xs font-bold text-moss" href={valueForInput(editing[column.key])} target="_blank">Ver imagem</a>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </label>
+                );
+              })}
             </div>
             <div className="flex justify-end gap-3">
               <button type="button" onClick={() => setEditing(null)} className="border border-line px-5 py-3 font-bold">Cancelar</button>
@@ -95,6 +126,45 @@ export function AdminModuleView({ module, rows, role, message, error }: { module
       )}
     </div>
   );
+}
+
+async function handleImageUpload(
+  event: ChangeEvent<HTMLInputElement>,
+  inputId: string,
+  fieldKey: string,
+  moduleKey: string,
+  setUploadingField: (value: string | null) => void,
+  setFormError: (value: string | null) => void
+) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  setFormError(null);
+  setUploadingField(fieldKey);
+
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("module", moduleKey);
+
+    const response = await fetch("/admin/upload", {
+      method: "POST",
+      body: formData
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Falha ao enviar imagem.");
+    }
+
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    if (input) input.value = payload.publicUrl;
+  } catch (caught) {
+    setFormError(caught instanceof Error ? caught.message : "Falha ao enviar imagem.");
+  } finally {
+    setUploadingField(null);
+    event.target.value = "";
+  }
 }
 
 function exportCsv(rows: Record<string, any>[], name: string) {

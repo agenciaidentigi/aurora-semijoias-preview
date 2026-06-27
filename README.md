@@ -10,6 +10,7 @@ A identidade visual e propria. O projeto nao usa textos, imagens, logotipos ou d
 - TypeScript
 - Tailwind CSS
 - Neon Postgres
+- Cloudinary para imagens
 - Autenticacao administrativa propria por cookie assinado
 - Deploy preparado para Vercel
 
@@ -54,6 +55,10 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 DATABASE_URL=postgresql://user:password@host.neon.tech/neondb?sslmode=require
 ADMIN_SESSION_SECRET=troque-por-um-segredo-longo-e-aleatorio
 NEXT_PUBLIC_SITE_NAME=Aurora Semijoias
+CLOUDINARY_CLOUD_NAME=seu-cloud-name
+CLOUDINARY_API_KEY=sua-api-key
+CLOUDINARY_API_SECRET=seu-api-secret
+CLOUDINARY_UPLOAD_FOLDER=aurora-semijoias
 ```
 
 ## Configurar Neon
@@ -69,16 +74,17 @@ Conta inicial documentada:
 
 Troque a senha imediatamente depois da primeira aprovacao/implantacao real.
 
-## Imagens
+## Imagens com Cloudinary
 
-Nesta previa com Neon, o painel usa URLs de imagem nos campos `Imagem principal`, `Logotipo` e `Imagem`.
+O painel administrativo envia imagens para o Cloudinary pela rota protegida `/admin/upload`.
 
-Neon e banco de dados, nao storage de arquivos. Para upload real de imagens apos a aprovacao do cliente, recomendamos adicionar:
+Campos como `Imagem principal`, `Imagem`, `Logotipo` e `Imagem da colecao` exibem um botao de upload. O arquivo e enviado ao Cloudinary e a URL final e preenchida automaticamente no formulario.
 
-- Vercel Blob;
-- Cloudflare R2;
-- AWS S3;
-- ou outro storage S3-compatible.
+Limites da previa:
+
+- JPG, PNG ou WebP;
+- ate 5 MB por imagem;
+- acesso permitido para `admin` e `editor`.
 
 ## Links de afiliados
 
