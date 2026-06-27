@@ -6,17 +6,28 @@ export const dynamic = "force-dynamic";
 
 async function getMetrics() {
   const sql = getDb();
-  const [products, clicks, leads, partners] = await Promise.all([
+  const [products, clicks, leads, partners, customers, sellers, stores, orders, payouts] = await Promise.all([
     sql.unsafe("select count(*)::int as total from products"),
     sql.unsafe("select count(*)::int as total from affiliate_clicks"),
     sql.unsafe("select count(*)::int as total from leads"),
-    sql.unsafe("select count(*)::int as total from affiliate_partners")
+    sql.unsafe("select count(*)::int as total from affiliate_partners"),
+    sql.unsafe("select count(*)::int as total from customer_profiles"),
+    sql.unsafe("select count(*)::int as total from seller_profiles"),
+    sql.unsafe("select count(*)::int as total from stores"),
+    sql.unsafe("select count(*)::int as total from orders"),
+    sql.unsafe("select count(*)::int as total from payout_requests")
   ]);
+  const total = (rows: unknown) => Number(((rows as { total?: number }[])[0]?.total) ?? 0);
   return [
-    ["Produtos", products[0]?.total ?? 0],
-    ["Cliques", clicks[0]?.total ?? 0],
-    ["Leads", leads[0]?.total ?? 0],
-    ["Parceiros", partners[0]?.total ?? 0]
+    ["Produtos", total(products)],
+    ["Cliques", total(clicks)],
+    ["Clientes", total(customers)],
+    ["Vendedores", total(sellers)],
+    ["Lojas", total(stores)],
+    ["Pedidos", total(orders)],
+    ["Saques", total(payouts)],
+    ["Leads", total(leads)],
+    ["Parceiros", total(partners)]
   ];
 }
 
@@ -24,7 +35,7 @@ export default async function AdminDashboard() {
   const metrics = await getMetrics();
   return (
     <div className="grid gap-6">
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         {metrics.map(([label, value]) => (
           <div key={label} className="border border-line bg-white p-5">
             <p className="text-sm text-neutral-500">{label}</p>

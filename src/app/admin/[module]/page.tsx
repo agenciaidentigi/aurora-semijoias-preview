@@ -16,7 +16,7 @@ export default async function AdminModulePage({ params, searchParams }: { params
   let error: string | undefined;
 
   try {
-    data = (await sql.unsafe(`select * from ${assertIdentifier(module.table)} order by updated_at desc limit 100`)) as Record<string, any>[];
+    data = (await sql.unsafe(`select * from ${assertIdentifier(module.table)} order by created_at desc limit 100`)) as unknown as Record<string, any>[];
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "Erro ao carregar registros.";
   }

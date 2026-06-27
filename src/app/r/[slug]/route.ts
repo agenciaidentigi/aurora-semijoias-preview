@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
@@ -21,9 +22,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
      limit 1`,
     [slug]
   );
-  const product = products[0];
+  const product = products[0] as unknown as Record<string, any> | undefined;
 
   if (!product) return NextResponse.redirect(new URL("/", request.url));
+  if (product.sale_type === "internal") return NextResponse.redirect(new URL(`/carrinho?produto=${product.slug}`, request.url));
 
   const url = new URL(request.url);
   const partner = product.affiliate_code
@@ -47,12 +49,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   await sql.unsafe(
     `insert into affiliate_clicks (
-      product_id, affiliate_partner_id, source, referrer, utm_source, utm_medium,
-      utm_campaign, utm_content, utm_term, user_agent, ip_hash, clicked_url, estimated_commission
-    ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      product_id, affiliate_partner_id, seller_id, store_id, source, referrer, utm_source, utm_medium,
+      utm_campaign, utm_content, utm_term, user_agent, ip_hash, clicked_url, destination_url, estimated_commission
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [
       product.id,
       product.affiliate_partner_id,
+      product.seller_id,
+      product.store_id,
       url.searchParams.get("source") || url.searchParams.get("utm_source"),
       request.headers.get("referer"),
       url.searchParams.get("utm_source"),
@@ -61,11 +65,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       url.searchParams.get("utm_content"),
       url.searchParams.get("utm_term"),
       request.headers.get("user-agent"),
-      request.headers.get("x-forwarded-for")?.split(",")[0] ?? null,
+      hashIp(request.headers.get("x-forwarded-for")?.split(",")[0] ?? null),
+      finalUrl,
       finalUrl,
       product.estimated_commission
     ]
   );
 
   return NextResponse.redirect(finalUrl, 302);
+}
+
+function hashIp(ip: string | null) {
+  if (!ip) return null;
+  return createHash("sha256").update(ip).digest("hex");
 }

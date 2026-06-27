@@ -7,9 +7,11 @@ export function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
-export function formatCurrency(value?: number | null) {
+export function formatCurrency(value?: number | string | null) {
   if (value == null) return "Sob consulta";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  const number = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(number)) return "Sob consulta";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(number);
 }
 
 export function toCsv(rows: Record<string, unknown>[]) {

@@ -29,7 +29,7 @@ function parseValue(value: FormDataEntryValue | null, type?: string) {
 async function assertModuleAccess(moduleKey: string, write = true) {
   const module = findAdminModule(moduleKey);
   if (!module) throw new Error("Modulo administrativo inexistente.");
-  const profile = await requireAdmin(write ? module.writeRoles : ["admin", "editor", "analyst"]);
+  const profile = await requireAdmin(["admin"]);
   return { module, profile };
 }
 
@@ -64,11 +64,15 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
         ...values,
         idSchema.parse(id)
       ]);
-      savedId = rows[0]?.id ?? id;
+      savedId = (rows[0] as unknown as { id?: string } | undefined)?.id ?? id;
     } else {
       const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
       const rows = await sql.unsafe(`insert into ${table} (${columns.join(", ")}) values (${placeholders}) returning id`, values);
-      savedId = rows[0]?.id;
+      savedId = (rows[0] as unknown as { id?: string } | undefined)?.id ?? "";
+    }
+
+    if (moduleKey === "solicitacoes-vendedores" && savedId) {
+      await syncSellerApplication(savedId, profile.id);
     }
 
     await sql.unsafe(
@@ -82,6 +86,56 @@ export async function saveAdminRecord(moduleKey: string, formData: FormData) {
 
   revalidatePath(`/admin/${moduleKey}`);
   redirect(`/admin/${moduleKey}?success=Registro salvo com sucesso`);
+}
+
+async function syncSellerApplication(applicationId: string, actorId: string) {
+  const sql = getDb();
+  const rows = await sql.unsafe("select * from seller_applications where id = $1 limit 1", [applicationId]);
+  const application = rows[0] as unknown as Record<string, any> | undefined;
+  if (!application) return;
+
+  const status = String(application.status ?? "pending");
+  await sql.unsafe(
+    `insert into seller_profiles (user_id, application_id, status, approved_at, created_by, updated_by)
+     values ($1, $2, $3::seller_application_status, case when $3 = 'approved' then now() else null end, $4, $4)
+     on conflict (user_id) do update set
+       application_id = excluded.application_id,
+       status = excluded.status,
+       approved_at = case when excluded.status = 'approved' then coalesce(seller_profiles.approved_at, now()) else seller_profiles.approved_at end,
+       suspended_at = case when excluded.status = 'suspended' then now() else seller_profiles.suspended_at end,
+       updated_by = excluded.updated_by`,
+    [application.user_id, application.id, status, actorId]
+  );
+
+  await sql.unsafe("insert into user_roles (user_id, role, status) values ($1, 'seller', 'active') on conflict (user_id, role) do update set status = 'active'", [application.user_id]);
+
+  if (status === "approved") {
+    const slug = `${slugify(String(application.store_name ?? "loja"))}-${String(application.user_id).slice(0, 6)}`;
+    await sql.unsafe(
+      `insert into stores (seller_id, name, slug, logo_url, description, whatsapp, email, social_links, status, created_by, updated_by)
+       values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'active',$9,$9)
+       on conflict (slug) do nothing`,
+      [
+        application.user_id,
+        application.store_name,
+        slug,
+        application.logo_url,
+        application.description,
+        application.whatsapp,
+        application.commercial_email,
+        JSON.stringify({ instagram: application.instagram, website: application.website }),
+        actorId
+      ]
+    );
+    await sql.unsafe("insert into notifications (user_id, title, message, type) values ($1, 'Loja aprovada', 'Sua loja foi aprovada. O painel do vendedor esta liberado.', 'success')", [application.user_id]);
+  }
+
+  if (status === "rejected") {
+    await sql.unsafe("insert into notifications (user_id, title, message, type) values ($1, 'Solicitacao recusada', $2, 'warning')", [
+      application.user_id,
+      application.rejection_reason || "Sua solicitacao de vendedor foi recusada."
+    ]);
+  }
 }
 
 export async function deleteAdminRecord(moduleKey: string, id: string) {
@@ -113,7 +167,7 @@ export async function duplicateProduct(id: string) {
 
   try {
     const rows = await sql.unsafe("select * from products where id = $1 limit 1", [parsedId]);
-    const product = rows[0];
+    const product = rows[0] as unknown as Record<string, any> | undefined;
     if (!product) throw new Error("Produto nao encontrado.");
 
     const { id: _id, created_at: _createdAt, updated_at: _updatedAt, ...copy } = product;
@@ -130,7 +184,7 @@ export async function duplicateProduct(id: string) {
       profile.id,
       "duplicate",
       "products",
-      created[0]?.id
+      (created[0] as unknown as { id?: string } | undefined)?.id
     ]);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao duplicar produto.";

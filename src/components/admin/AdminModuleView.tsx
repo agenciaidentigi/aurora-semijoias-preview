@@ -12,7 +12,7 @@ function valueForInput(value: unknown) {
 }
 
 function isImageField(key: string) {
-  return ["main_image_url", "image_url", "hero_image_url", "logo_url"].includes(key);
+  return ["main_image_url", "image_url", "hero_image_url", "logo_url", "cover_image_url", "icon_url", "avatar_url", "receipt_url", "document_url"].includes(key);
 }
 
 export function AdminModuleView({ module, rows, role, message, error }: { module: AdminModule; rows: Record<string, any>[]; role: Role; message?: string; error?: string }) {
@@ -95,7 +95,7 @@ export function AdminModuleView({ module, rows, role, message, error }: { module
                     <span className="text-sm font-bold">{column.label}</span>
                     {column.type === "textarea" ? <textarea name={column.key} defaultValue={valueForInput(editing[column.key])} className="min-h-28 border border-line bg-white p-3" /> : column.type === "select" ? <select name={column.key} defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3">{(column.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select> : column.type === "checkbox" ? <input type="checkbox" name={column.key} defaultChecked={Boolean(editing[column.key])} className="h-5 w-5" /> : (
                       <div className="grid gap-2">
-                        <input id={inputId} name={column.key} type={column.type === "number" ? "number" : column.type === "email" ? "email" : column.type === "url" ? "url" : "text"} step="0.01" defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3" />
+                        <input id={inputId} name={column.key} type={column.type === "number" ? "number" : column.type === "email" ? "email" : column.type === "url" ? "url" : column.type === "color" ? "color" : column.type === "date" ? "date" : "text"} step="0.01" defaultValue={valueForInput(editing[column.key])} className="border border-line bg-white p-3" />
                         {isUploadable && (
                           <div className="flex items-center gap-3">
                             <label className="cursor-pointer border border-dashed border-line bg-white px-3 py-2 text-xs font-bold uppercase">

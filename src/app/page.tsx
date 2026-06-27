@@ -1,8 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
+import { PublicFooter } from "@/components/site/PublicFooter";
+import { PublicHeader } from "@/components/site/PublicHeader";
 import { getDb } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 const fallbackProducts: Partial<Product>[] = [
   { name: "Anel solitario zirconia cristal", slug: "anel-solitario-zirconia-cristal", current_price: 89.9, badge: "Destaque", main_image_url: "https://images.unsplash.com/photo-1603561596112-0a132b757442?auto=format&fit=crop&w=900&q=85" },
@@ -29,18 +33,7 @@ export default async function HomePage() {
 
   return (
     <main className="bg-paper text-ink">
-      <div className="flex flex-wrap items-center justify-center gap-4 bg-ink px-5 py-2 text-sm text-white">
-        <span>10% off em escolhas selecionadas | compra segura nos parceiros</span>
-        <Link className="font-bold text-[#f2d9a2]" href="#produtos">Ver curadoria</Link>
-      </div>
-
-      <header className="sticky top-0 z-20 grid gap-4 border-b border-line bg-paper/95 px-5 py-5 backdrop-blur lg:grid-cols-[auto_1fr_auto] lg:px-14">
-        <Link href="/" className="font-serif text-4xl uppercase">Aurora</Link>
-        <nav className="flex gap-6 overflow-x-auto text-sm uppercase text-muted-foreground lg:justify-center">
-          {["Aneis", "Brincos", "Colares", "Pulseiras", "Presentes"].map((item) => <a key={item} href="#produtos">{item}</a>)}
-        </nav>
-        <Link href="/admin" className="border border-ink px-4 py-2 text-center text-xs font-bold uppercase">Admin</Link>
-      </header>
+      <PublicHeader />
 
       <section className="relative flex min-h-[70vh] items-center overflow-hidden px-6 py-24 text-white lg:px-24">
         <Image src="https://images.unsplash.com/photo-1611591437281-460bfbe1220a?auto=format&fit=crop&w=1800&q=85" alt="Semijoias delicadas" fill priority className="object-cover" />
@@ -81,12 +74,15 @@ export default async function HomePage() {
                 <span className="text-xs font-bold uppercase text-neutral-500">{product.badge ?? "Semijoia"}</span>
                 <h3 className="min-h-14 font-serif text-2xl">{product.name}</h3>
                 <strong className="text-clay">{formatCurrency(product.current_price)}</strong>
-                <Link href={`/r/${product.slug}`} className="bg-ink px-4 py-3 text-center text-xs font-extrabold uppercase text-white">Comprar no parceiro</Link>
+                <Link href={product.sale_type === "internal" ? `/carrinho?produto=${product.slug}` : `/r/${product.slug}`} className="bg-ink px-4 py-3 text-center text-xs font-extrabold uppercase text-white">
+                  {product.sale_type === "internal" ? "Adicionar ao carrinho" : "Comprar na loja parceira"}
+                </Link>
               </div>
             </article>
           ))}
         </div>
       </section>
+      <PublicFooter />
     </main>
   );
 }
